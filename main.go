@@ -36,6 +36,32 @@ func main() {
 		}
 	})
 
+	// Series
+	mux.HandleFunc("/series", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetSeries(w, r)
+		case http.MethodPost:
+			handlers.CreateSerie(w, r)
+		default:
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/series/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetSerieByID(w, r)
+		case http.MethodPut:
+			handlers.UpdateSerie(w, r)
+		case http.MethodDelete:
+			handlers.DeleteSerie(w, r)
+		default:
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Wrap con middleware de CORS
 	handler := corsMiddleware(mux)
 
 	port := os.Getenv("PORT")

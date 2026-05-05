@@ -11,7 +11,7 @@ import (
 	"github.com/josesan28/proyecto-1-backend-web/models"
 )
 
-// GET /series
+// GET /series 
 func GetSeries(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.DB.Query(`
 		SELECT id, titulo, descripcion, episodios, anio, image_path, creado_a, actualizado_a
@@ -75,29 +75,45 @@ func GetSerieByID(w http.ResponseWriter, r *http.Request) {
 
 // POST /series
 func CreateSerie(w http.ResponseWriter, r *http.Request) {
-	var input models.SerieInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		writeError(w, http.StatusBadRequest, "Body inválido")
-		return
+	// Parsear form (imagen + campos de texto)
+	if err := r.ParseMultipartForm(5 << 20); err != nil {
+		// Intentar JSON si no es multipart
+		if err := r.ParseForm(); err != nil {
+			writeError(w, http.StatusBadRequest, "Error parseando el body")
+			return
+		}
 	}
 
-	input.Titulo = strings.TrimSpace(input.Titulo)
-	if input.Titulo == "" {
+	titulo := strings.TrimSpace(r.FormValue("titulo"))
+	if titulo == "" {
 		writeError(w, http.StatusBadRequest, "El título es requerido")
 		return
 	}
 
-	if input.Episodios != nil && *input.Episodios < 0 {
+	descripcion := nullableString(r.FormValue("descripcion"))
+	episodios := nullableInt(r.FormValue("episodios"))
+	anio := nullableInt(r.FormValue("anio"))
+
+	// Validar episodios si viene
+	if episodios != nil && *episodios < 0 {
 		writeError(w, http.StatusBadRequest, "Los episodios no pueden ser negativos")
 		return
 	}
 
+	// Manejar imagen si viene
+	imagePath, err := saveUploadedImage(r, "imagen")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Error guardando la imagen")
+		return
+	}
+
+	// Insertar serie
 	var s models.Serie
-	err := db.DB.QueryRow(`
-		INSERT INTO serie (titulo, descripcion, episodios, anio)
-		VALUES ($1, $2, $3, $4)
+	err = db.DB.QueryRow(`
+		INSERT INTO serie (titulo, descripcion, episodios, anio, image_path)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, titulo, descripcion, episodios, anio, image_path, creado_a, actualizado_a
-	`, input.Titulo, input.Descripcion, input.Episodios, input.Anio).Scan(
+	`, titulo, descripcion, episodios, anio, imagePath).Scan(
 		&s.ID, &s.Titulo, &s.Descripcion,
 		&s.Episodios, &s.Anio, &s.ImagePath,
 		&s.CreadoA, &s.ActualizadoA,
@@ -107,8 +123,9 @@ func CreateSerie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Asociar géneros
-	associateGeneros(s.ID, input.GeneroIDs)
+	// Asociar géneros si vienen
+	generoIDs := parseIntList(r.FormValue("genero_ids"))
+	associateGeneros(s.ID, generoIDs)
 	s.Generos = fetchGenerosDeSerie(s.ID)
 
 	writeJSON(w, http.StatusCreated, s)
@@ -130,29 +147,55 @@ func UpdateSerie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var input models.SerieInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		writeError(w, http.StatusBadRequest, "Body inválido")
-		return
+	if err := r.ParseMultipartForm(5 << 20); err != nil {
+		r.ParseForm()
 	}
 
-	input.Titulo = strings.TrimSpace(input.Titulo)
-	if input.Titulo == "" {
+	titulo := strings.TrimSpace(r.FormValue("titulo"))
+	if titulo == "" {
 		writeError(w, http.StatusBadRequest, "El título es requerido")
 		return
 	}
 
-	if input.Episodios != nil && *input.Episodios < 0 {
+	descripcion := nullableString(r.FormValue("descripcion"))
+	episodios := nullableInt(r.FormValue("episodios"))
+	anio := nullableInt(r.FormValue("anio"))
+
+	if anio != nil && (*anio < 1900 || *anio > 2100) {
+		writeError(w, http.StatusBadRequest, "El año debe estar entre 1900 y 2100")
+		return
+	}
+	if episodios != nil && *episodios < 0 {
 		writeError(w, http.StatusBadRequest, "Los episodios no pueden ser negativos")
 		return
 	}
 
+	// Si viene imagen nueva, guardarla, si no, mantener la existente
+	imagePath, err := saveUploadedImage(r, "imagen")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Error guardando la imagen")
+		return
+	}
+
+	var query string
+	var queryArgs []any
+
+	if imagePath != nil {
+		query = `
+			UPDATE serie SET titulo=$1, descripcion=$2, episodios=$3, anio=$4, image_path=$5, actualizado_a=NOW()
+			WHERE id=$6
+			RETURNING id, titulo, descripcion, episodios, anio, image_path, creado_a, actualizado_a`
+		queryArgs = []any{titulo, descripcion, episodios, anio, imagePath, id}
+	} else {
+		query = `
+			UPDATE serie SET titulo=$1, descripcion=$2, episodios=$3, anio=$4, actualizado_a=NOW()
+			WHERE id=$5
+			RETURNING id, titulo, descripcion, episodios, anio, image_path, creado_a, actualizado_a`
+		queryArgs = []any{titulo, descripcion, episodios, anio, id}
+	}
+
 	var s models.Serie
-	err = db.DB.QueryRow(`
-		UPDATE serie SET titulo=$1, descripcion=$2, episodios=$3, anio=$4, actualizado_a=NOW()
-		WHERE id=$5
-		RETURNING id, titulo, descripcion, episodios, anio, image_path, creado_a, actualizado_a
-	`, input.Titulo, input.Descripcion, input.Episodios, input.Anio, id).Scan(
+	err = db.DB.QueryRow(query, queryArgs...).Scan(
 		&s.ID, &s.Titulo, &s.Descripcion,
 		&s.Episodios, &s.Anio, &s.ImagePath,
 		&s.CreadoA, &s.ActualizadoA,
@@ -163,8 +206,9 @@ func UpdateSerie(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reasociar géneros
+	generoIDs := parseIntList(r.FormValue("genero_ids"))
 	db.DB.Exec("DELETE FROM serie_genero WHERE serie_id=$1", s.ID)
-	associateGeneros(s.ID, input.GeneroIDs)
+	associateGeneros(s.ID, generoIDs)
 	s.Generos = fetchGenerosDeSerie(s.ID)
 
 	writeJSON(w, http.StatusOK, s)
@@ -253,4 +297,8 @@ func parseIntList(s string) []int {
 		}
 	}
 	return result
+}
+
+func decodeJSON(r *http.Request, v any) error {
+	return json.NewDecoder(r.Body).Decode(v)
 }
