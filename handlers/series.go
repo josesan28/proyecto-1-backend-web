@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,13 +12,69 @@ import (
 	"github.com/josesan28/proyecto-1-backend-web/models"
 )
 
-// GET /series 
+// GET /series
 func GetSeries(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.DB.Query(`
-		SELECT id, titulo, descripcion, episodios, anio, image_path, creado_a, actualizado_a
-		FROM serie
-		ORDER BY creado_a DESC
-	`)
+	q := r.URL.Query()
+
+	// Paginación
+	page, _ := strconv.Atoi(q.Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+
+	// Búsqueda
+	search := strings.TrimSpace(q.Get("q"))
+
+	// Ordenamiento
+	sortField := q.Get("sort")
+	validSorts := map[string]string{
+		"titulo": "s.titulo",
+		"anio": "s.anio",
+		"episodios": "s.episodios",
+		"creado_a": "s.creado_a",
+	}
+	orderBy, ok := validSorts[sortField]
+	if !ok {
+		orderBy = "s.creado_a"
+	}
+
+	order := strings.ToUpper(q.Get("order"))
+	if order != "ASC" && order != "DESC" {
+		order = "DESC"
+	}
+
+	// Construir WHERE dinámico
+	args := []any{}
+	where := ""
+	if search != "" {
+		args = append(args, "%"+search+"%")
+		where = fmt.Sprintf("WHERE s.titulo ILIKE $%d", len(args))
+	}
+
+	// Contar total
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM serie s %s", where)
+	var total int
+	if err := db.DB.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		writeError(w, http.StatusInternalServerError, "Error contando series")
+		return
+	}
+
+	// Query principal
+	args = append(args, limit, offset)
+	mainQuery := fmt.Sprintf(`
+		SELECT s.id, s.titulo, s.descripcion, s.episodios, s.anio, s.image_path, s.creado_a, s.actualizado_a
+		FROM serie s
+		%s
+		ORDER BY %s %s
+		LIMIT $%d OFFSET $%d
+	`, where, orderBy, order, len(args)-1, len(args))
+
+	rows, err := db.DB.Query(mainQuery, args...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Error obteniendo series")
 		return
@@ -27,11 +84,12 @@ func GetSeries(w http.ResponseWriter, r *http.Request) {
 	series := []models.Serie{}
 	for rows.Next() {
 		var s models.Serie
-		if err := rows.Scan(
+		err := rows.Scan(
 			&s.ID, &s.Titulo, &s.Descripcion,
 			&s.Episodios, &s.Anio, &s.ImagePath,
 			&s.CreadoA, &s.ActualizadoA,
-		); err != nil {
+		)
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, "Error leyendo series")
 			return
 		}
@@ -39,9 +97,19 @@ func GetSeries(w http.ResponseWriter, r *http.Request) {
 		series = append(series, s)
 	}
 
-	writeJSON(w, http.StatusOK, series)
-}
+	totalPages := total / limit
+	if total%limit != 0 {
+		totalPages++
+	}
 
+	writeJSON(w, http.StatusOK, models.PaginatedSeries{
+		Data:       series,
+		Total:      total,
+		Page:       page,
+		Limit:      limit,
+		TotalPages: totalPages,
+	})
+}
 // GET /series/{id}
 func GetSerieByID(w http.ResponseWriter, r *http.Request) {
 	id, err := extractID(r.URL.Path, 2)
