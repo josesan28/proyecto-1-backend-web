@@ -61,6 +61,21 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/series/ratings/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetRatings(w, r)
+		case http.MethodPost:
+			handlers.CreateRating(w, r)
+		case http.MethodPut:
+			handlers.UpdateRating(w, r)
+		case http.MethodDelete:
+			handlers.DeleteRating(w, r)
+		default:
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Wrap con middleware de CORS
 	handler := corsMiddleware(mux)
 
