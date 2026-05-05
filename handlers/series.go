@@ -143,7 +143,6 @@ func GetSerieByID(w http.ResponseWriter, r *http.Request) {
 
 // POST /series
 func CreateSerie(w http.ResponseWriter, r *http.Request) {
-	// Parsear form (imagen + campos de texto)
 	if err := r.ParseMultipartForm(5 << 20); err != nil {
 		// Intentar JSON si no es multipart
 		if err := r.ParseForm(); err != nil {

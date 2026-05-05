@@ -45,7 +45,7 @@ func GetRatings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ratings)
 }
 
-// POST /series/{id}/ratings
+// POST /series/{id_serie}/ratings
 func CreateRating(w http.ResponseWriter, r *http.Request) {
 	serieID, err := extractID(r.URL.Path, 3) // ← cambiado de 2 a 3
 	if err != nil {
@@ -87,7 +87,7 @@ func CreateRating(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, rt)
 }
 
-// PUT /series/{id}/ratings/{ratingId}
+// PUT /series/{id_serie}/ratings/{ratingId}
 func UpdateRating(w http.ResponseWriter, r *http.Request) {
 	serieID, err := extractID(r.URL.Path, 3) // ← cambiado de 2 a 3
 	if err != nil {
@@ -133,7 +133,7 @@ func UpdateRating(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rt)
 }
 
-// DELETE /series/{id}/ratings/{ratingId}
+// DELETE /series/{id_serie}/ratings/{ratingId}
 func DeleteRating(w http.ResponseWriter, r *http.Request) {
 	serieID, err := extractID(r.URL.Path, 3) // ← cambiado de 2 a 3
 	if err != nil {
