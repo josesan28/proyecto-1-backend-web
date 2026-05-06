@@ -1,12 +1,3 @@
-CREATE TABLE usuario (
-    id            SERIAL PRIMARY KEY,
-    username      VARCHAR(50) NOT NULL UNIQUE,
-    correo        VARCHAR(255) NOT NULL UNIQUE,
-    hash_password VARCHAR(255) NOT NULL,
-    creado_a      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    actualizado_a TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE genero (
     id   SERIAL PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL UNIQUE
