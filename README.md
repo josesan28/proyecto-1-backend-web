@@ -78,7 +78,7 @@ El servidor queda disponible en http://localhost:8080
 
 ## Endpoints
 
-| Metodo | Ruta | Descripción |
+| Método | Ruta | Descripción |
 |--------|------|-------------|
 | GET | /series | Listar series. Acepta ?page, ?limit, ?q, ?sort, ?order |
 | GET | /series/:id | Obtener una serie por ID |
@@ -112,7 +112,7 @@ CORS (Cross-Origin Resource Sharing) es una política de seguridad del navegador
 
 ---
 
-## Screenshot
+## Screenshot de la aplicación funcionando
 
 ![alt text](/images/image.png)
 
